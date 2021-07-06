@@ -180,10 +180,11 @@ inline void EnablePrivilege(const TCHAR* wpPrivilegeName, bool bEnable) {
 		throw std::runtime_error(GetErrorMessage(GetLastError()));
 }
 
-int main() {
+int wmain(int argc, wchar_t* wargv[]) {
+	if (argc != 3) return 1;
 	try {
-		const std::wstring LoadTargetSubKey = L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders";
-		const std::wstring LoadTargetKey = L"Personal";
+		const std::wstring LoadTargetSubKey = wargv[1];
+		const std::wstring LoadTargetKey = wargv[2];
 		std::wcout.imbue(std::locale("Japanese"));
 		EnablePrivilege(SE_RESTORE_NAME, true);
 		const auto UserAndSidPairs = GetUserNameAndSids();
