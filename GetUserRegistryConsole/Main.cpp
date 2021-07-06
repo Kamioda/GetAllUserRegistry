@@ -1,4 +1,4 @@
-#include <Windows.h>
+ï»¿#include <Windows.h>
 #include <AclAPI.h>
 #include <sddl.h>
 #include <string>
@@ -40,7 +40,7 @@ inline std::string GetErrorMessage(const T& ErrorCode) {
 	if (length == 0) return "An error occured while getting error message.";
 	auto scope = MakeInferiorScopeExit([lpMessageBuffer] { LocalFree(lpMessageBuffer); });
 	DWORD i = length - 3;
-	for (; '\r' != lpMessageBuffer[i] && '\n' != lpMessageBuffer[i] && '\0' != lpMessageBuffer[i]; i++);//‰üs•¶šíœ
+	for (; '\r' != lpMessageBuffer[i] && '\n' != lpMessageBuffer[i] && '\0' != lpMessageBuffer[i]; i++);//æ”¹è¡Œæ–‡å­—å‰Šé™¤
 	lpMessageBuffer[i] = '\0';
 	return lpMessageBuffer;
 }
@@ -101,25 +101,25 @@ inline std::wstring GetSIDString(const std::wstring& AccountName) {
 	DWORD dwDomainLen{};
 	SID_NAME_USE snu{}, tmpSnu{};
 
-	// SID‚Ì’·‚³‚ğæ“¾‚·‚é
-	// ‚±‚Ì•”•ª‚Å‚ÍŠÖ”‚Í•K‚¸ƒGƒ‰[‚É‚È‚é‚Ì‚Å‚±‚±‚ÅƒGƒ‰[”»’è‚µ‚Ä—áŠO“Š‚°‚é‚Æˆ—‚ªI‚í‚Á‚Ä‚µ‚Ü‚¤
+	// SIDã®é•·ã•ã‚’å–å¾—ã™ã‚‹
+	// ã“ã®éƒ¨åˆ†ã§ã¯é–¢æ•°ã¯å¿…ãšã‚¨ãƒ©ãƒ¼ã«ãªã‚‹ã®ã§ã“ã“ã§ã‚¨ãƒ©ãƒ¼åˆ¤å®šã—ã¦ä¾‹å¤–æŠ•ã’ã‚‹ã¨å‡¦ç†ãŒçµ‚ã‚ã£ã¦ã—ã¾ã†
 	LookupAccountNameW(nullptr, AccountName.c_str(), nullptr, &dwSidLen, nullptr, &dwDomainLen, &tmpSnu);
 	HANDLE ProcessHeap = GetProcessHeap();
 	PSID psid = (PSID)HeapAlloc(ProcessHeap, 0, dwSidLen);
 	auto ScopeSid = MakeInferiorScopeExit([ProcessHeap, psid] {HeapFree(ProcessHeap, 0, psid); });
 
-	// ˆê•Ï”
-	// ‚±‚ê‚ğ‘æ‚Tˆø”‚É“ü‚ê‚È‚¢‚ÆConvertSidToStringSid‚Å—‚¿‚é(‚È‚ºH)
+	// ä¸€æ™‚å¤‰æ•°
+	// ã“ã‚Œã‚’ç¬¬ï¼•å¼•æ•°ã«å…¥ã‚Œãªã„ã¨ConvertSidToStringSidã§è½ã¡ã‚‹(ãªãœï¼Ÿ)
 
 	std::wstring szComputerNameBuf{};
 	szComputerNameBuf.resize(dwDomainLen);
 
-	// SID‚ğæ“¾‚·‚é
-	// ƒGƒ‰[ID‚ÍGetLastError‚Åæ‚ê‚é‚Ì‚Å•K—v‚É‰‚¶‚ÄƒGƒ‰[ƒƒbƒZ[ƒW—vXV
+	// SIDã‚’å–å¾—ã™ã‚‹
+	// ã‚¨ãƒ©ãƒ¼IDã¯GetLastErrorã§å–ã‚Œã‚‹ã®ã§å¿…è¦ã«å¿œã˜ã¦ã‚¨ãƒ©ãƒ¼ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸è¦æ›´æ–°
 	LookupAccountNameW(nullptr, AccountName.c_str(), psid, &dwSidLen, &szComputerNameBuf[0], &dwDomainLen, &snu);
 	if (psid == nullptr) throw std::runtime_error("Failed to get SID");
 
-	// SID‚ğ•¶š—ñ‚Æ‚µ‚Äæ“¾‚·‚é
+	// SIDã‚’æ–‡å­—åˆ—ã¨ã—ã¦å–å¾—ã™ã‚‹
 
 	LPTSTR lpBuf{};
 	if (!ConvertSidToStringSid(psid, &lpBuf)) {
