@@ -12,61 +12,6 @@
 #include <iostream>
 #pragma comment(lib, "Netapi32.lib")
 
-
-inline std::wstring GetSIDString(const std::wstring& AccountName) {
-	DWORD dwSidLen{};
-	DWORD dwDomainLen{};
-	SID_NAME_USE snu{}, tmpSnu{};
-
-	// SIDの長さを取得する
-	// この部分では関数は必ずエラーになるのでここでエラー判定して例外投げると処理が終わってしまう
-	LookupAccountNameW(nullptr, AccountName.c_str(), nullptr, &dwSidLen, nullptr, &dwDomainLen, &tmpSnu);
-	HANDLE ProcessHeap = GetProcessHeap();
-	PSID psid = (PSID)HeapAlloc(ProcessHeap, 0, dwSidLen);
-
-	// 一時変数
-	// これを第５引数に入れないとConvertSidToStringSidで落ちる(なぜ？)
-
-	std::wstring szComputerNameBuf{};
-	szComputerNameBuf.resize(dwDomainLen);
-
-	// SIDを取得する
-	// エラーIDはGetLastErrorで取れるので必要に応じてエラーメッセージ要更新
-	LookupAccountNameW(nullptr, AccountName.c_str(), psid, &dwSidLen, &szComputerNameBuf[0], &dwDomainLen, &snu);
-	if (psid == nullptr) throw std::runtime_error("Failed to get SID");
-
-	// SIDを文字列として取得する
-
-	LPTSTR lpBuf{};
-	if (!ConvertSidToStringSid(psid, &lpBuf)) {
-		DWORD dwError = GetLastError();
-		HeapFree(ProcessHeap, 0, psid);
-		throw std::runtime_error("Error in ConvertSidToStringSid Function");
-	}
-	HeapFree(ProcessHeap, 0, psid);
-	std::wstring str{};
-	str.resize(std::wcslen(lpBuf));
-	str = lpBuf;
-	LocalFree(lpBuf);
-	return str;
-}
-
-template<typename T, std::enable_if_t<std::is_same_v<T, DWORD>, std::nullptr_t> = nullptr>
-inline std::string GetErrorMessage(const T& ErrorCode) {
-	char* lpMessageBuffer = nullptr;
-	const DWORD length = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, ErrorCode, LANG_USER_DEFAULT, (LPSTR)&lpMessageBuffer, 0, NULL);
-	if (length == 0) return "An error occured while getting error message.";
-	DWORD i = length - 3;
-	for (; '\r' != lpMessageBuffer[i] && '\n' != lpMessageBuffer[i] && '\0' != lpMessageBuffer[i]; i++);//改行文字削除
-	lpMessageBuffer[i] = '\0';
-	std::string RetVal(lpMessageBuffer);
-	LocalFree(lpMessageBuffer);
-	return RetVal;
-}
-
-template<typename T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, DWORD>, std::nullptr_t> = nullptr>
-std::string GetErrorMessage(const T& ErrorCode) { return GetErrorMessage(static_cast<DWORD>(ErrorCode)); }
-
 template<typename EF>
 class InferiorScopeExit {
 public:
@@ -83,10 +28,26 @@ public:
 	void release() noexcept { execute_on_destruction = false; }
 private:
 	EF exit_function;
-	bool execute_on_destruction{true};
+	bool execute_on_destruction{ true };
 };
 
 template <class EF>InferiorScopeExit<std::decay_t<EF>> MakeInferiorScopeExit(EF&& exit_function) { return { std::forward<EF>(exit_function) }; }
+
+template<typename T, std::enable_if_t<std::is_same_v<T, DWORD>, std::nullptr_t> = nullptr>
+inline std::string GetErrorMessage(const T& ErrorCode) {
+	char* lpMessageBuffer = nullptr;
+	const DWORD length = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, ErrorCode, LANG_USER_DEFAULT, (LPSTR)&lpMessageBuffer, 0, NULL);
+	if (length == 0) return "An error occured while getting error message.";
+	auto scope = MakeInferiorScopeExit([lpMessageBuffer] { LocalFree(lpMessageBuffer); });
+	DWORD i = length - 3;
+	for (; '\r' != lpMessageBuffer[i] && '\n' != lpMessageBuffer[i] && '\0' != lpMessageBuffer[i]; i++);//改行文字削除
+	lpMessageBuffer[i] = '\0';
+	return lpMessageBuffer;
+}
+
+template<typename T, std::enable_if_t<std::is_integral_v<T> && !std::is_same_v<T, DWORD>, std::nullptr_t> = nullptr>
+std::string GetErrorMessage(const T& ErrorCode) { return GetErrorMessage(static_cast<DWORD>(ErrorCode)); }
+
 
 inline std::wstring GetRegistryKey(const HKEY& Root, const std::wstring& SubKey, const std::wstring& Key) {
 	HKEY hKey = nullptr;
@@ -133,6 +94,39 @@ public:
 inline std::wstring GetRegKeyData(const std::wstring& SID, const std::wstring& SubKeyTree, const std::wstring& Key) {
 	const std::wstring RefKey = SID + L"\\" + SubKeyTree;
 	return GetRegistryKey(HKEY_USERS, RefKey, Key);
+}
+
+inline std::wstring GetSIDString(const std::wstring& AccountName) {
+	DWORD dwSidLen{};
+	DWORD dwDomainLen{};
+	SID_NAME_USE snu{}, tmpSnu{};
+
+	// SIDの長さを取得する
+	// この部分では関数は必ずエラーになるのでここでエラー判定して例外投げると処理が終わってしまう
+	LookupAccountNameW(nullptr, AccountName.c_str(), nullptr, &dwSidLen, nullptr, &dwDomainLen, &tmpSnu);
+	HANDLE ProcessHeap = GetProcessHeap();
+	PSID psid = (PSID)HeapAlloc(ProcessHeap, 0, dwSidLen);
+	auto ScopeSid = MakeInferiorScopeExit([ProcessHeap, psid] {HeapFree(ProcessHeap, 0, psid); });
+
+	// 一時変数
+	// これを第５引数に入れないとConvertSidToStringSidで落ちる(なぜ？)
+
+	std::wstring szComputerNameBuf{};
+	szComputerNameBuf.resize(dwDomainLen);
+
+	// SIDを取得する
+	// エラーIDはGetLastErrorで取れるので必要に応じてエラーメッセージ要更新
+	LookupAccountNameW(nullptr, AccountName.c_str(), psid, &dwSidLen, &szComputerNameBuf[0], &dwDomainLen, &snu);
+	if (psid == nullptr) throw std::runtime_error("Failed to get SID");
+
+	// SIDを文字列として取得する
+
+	LPTSTR lpBuf{};
+	if (!ConvertSidToStringSid(psid, &lpBuf)) {
+		throw std::runtime_error("Error in ConvertSidToStringSid Function" + GetErrorMessage(GetLastError()));
+	}
+	auto ScopeBuf = MakeInferiorScopeExit([lpBuf] { LocalFree(lpBuf); });
+	return lpBuf;
 }
 
 inline std::vector<std::pair<std::wstring, std::wstring>> GetUserNameAndSids() {
