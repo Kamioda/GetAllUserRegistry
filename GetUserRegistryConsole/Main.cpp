@@ -123,8 +123,7 @@ inline std::wstring GetSIDString(const std::wstring& AccountName) {
 
 	LPTSTR lpBuf{};
 	if (!ConvertSidToStringSid(psid, &lpBuf)) {
-		DWORD dwError = GetLastError();
-		throw std::runtime_error("Error in ConvertSidToStringSid Function");
+		throw std::runtime_error("Error in ConvertSidToStringSid Function" + GetErrorMessage(GetLastError()));
 	}
 	auto ScopeBuf = MakeInferiorScopeExit([lpBuf] { LocalFree(lpBuf); });
 	return lpBuf;
